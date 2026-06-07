@@ -72,6 +72,47 @@ const DEFAULT_QUESTS = [
 ];
 
 // ============================================================
+// UNLOCK SYSTEM
+// Each NPC shop, class, zone, or feature is gated by a string
+// unlock ID on the player object.  Quest rewards push IDs into
+// player.unlocks; content checks player.unlocks.includes(id).
+// To add future story gates just add a new NPC_SHOPS entry and
+// a quest with the matching unlockId.
+// ============================================================
+const NPC_SHOPS = {
+  // npcId → { requires?: unlockId, items: [...] }
+  mortis: {
+    npcId:    "mortis",
+    requires: "mortis_trial_done",   // quest must be complete to browse shop
+    items: [
+      {
+        id:       "class_necromancer",
+        name:     "Necromancer Class",
+        icon:     "💀",
+        cost:     500,
+        desc:     "Unlock the Necromancer — a dark spellcaster who commands souls and channels death itself.",
+        unlockId: "class_necromancer",
+      },
+    ],
+  },
+};
+
+// NPC quests — added to player.quests only when accepted from the NPC
+const NPC_QUESTS = {
+  mortis: {
+    id:       "q_mortis_1",
+    npcId:    "mortis",
+    name:     "Trial of Shadows",
+    desc:     "Mortis watches you with hollow eyes. \"Slay ten Shadow Wolves. Return when the forest runs cold.\"",
+    target:   "Shadow Wolf",
+    count:    10,
+    reward:   { xp: 300, gold: 0 },
+    unlockId: "mortis_trial_done",  // pushed to player.unlocks on completion
+    done:     false,
+  },
+};
+
+// ============================================================
 // HELPERS
 // ============================================================
 const rand       = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -86,6 +127,7 @@ function initPlayer(className) {
     atk: 0, def: 0, cooldowns: [0,0,0], inventory: [],
     quests: JSON.parse(JSON.stringify(DEFAULT_QUESTS)),
     kills: {}, stats: { totalDmg: 0, kills: 0, deaths: 0 },
+    unlocks: [],   // array of unlock ID strings — gates classes, shops, zones
   };
 }
 
@@ -345,6 +387,7 @@ export default function Game() {
   const [notification, setNotification] = useState(null);
   const [heroPos, setHeroPos]           = useState({ x: 40 });
   const [leaderboard, setLeaderboard]   = useState([]);
+  const [mortisOpen, setMortisOpen]     = useState(false);
   const [sfsConnected, setSfsConnected] = useState(false);
   const [otherPlayers, setOtherPlayers] = useState(new Map());
   const [chatMessages, setChatMessages] = useState([]);
@@ -674,6 +717,9 @@ export default function Game() {
                 if ((np.kills[en.name]||0) >= q.count) {
                   notify(`✅ Quest Complete: ${q.name}! +${q.reward.xp}XP +${q.reward.gold}G`, "#44ff88");
                   np.xp += q.reward.xp; np.gold += q.reward.gold;
+                  // Grant unlock ID if this quest has one
+                  if (q.unlockId && !np.unlocks.includes(q.unlockId))
+                    np.unlocks = [...np.unlocks, q.unlockId];
                   return {...q, done: true};
                 }
                 return q;
@@ -753,6 +799,47 @@ export default function Game() {
     });
   }, [notify, playAnim]);
 
+  // Accept a quest from an NPC (adds it to player.quests if not already there)
+  const acceptNpcQuest = useCallback((npcId) => {
+    const q = NPC_QUESTS[npcId];
+    if (!q) return;
+    setPlayer(p => {
+      if (!p) return p;
+      if (p.quests.find(pq => pq.id === q.id)) return p; // already accepted
+      notify(`📜 Quest accepted: ${q.name}`, "#ffe066");
+      return { ...p, quests: [...p.quests, JSON.parse(JSON.stringify(q))] };
+    });
+  }, [notify]);
+
+  // Buy an item from an NPC unlock shop
+  const buyUnlockItem = useCallback((item) => {
+    setPlayer(p => {
+      if (!p) return p;
+      if (p.gold < item.cost) { notify("Not enough gold!", "#ff6b6b"); return p; }
+      if (p.unlocks.includes(item.unlockId)) { notify("Already unlocked!", "#ff9966"); return p; }
+      const np = { ...p, gold: p.gold - item.cost, unlocks: [...p.unlocks, item.unlockId] };
+      notify(`✨ Unlocked: ${item.name}!`, "#9b59b6");
+      saveCharacter(np);
+      return np;
+    });
+  }, [notify, saveCharacter]);
+
+  // Switch the player's active class (keeps current level / stats)
+  const switchClass = useCallback((className) => {
+    setPlayer(p => {
+      if (!p) return p;
+      const cls = CLASSES[className];
+      // Scale HP/MP to new class base + accumulated level bonuses
+      const bonusHp = (p.level - 1) * 15;
+      const bonusMp = (p.level - 1) * 10;
+      const np = { ...p, class: className, maxHp: cls.hp + bonusHp, hp: cls.hp + bonusHp, maxMp: cls.mp + bonusMp, mp: cls.mp + bonusMp, cooldowns: [0,0,0] };
+      notify(`💀 Class changed to ${cls.name}!`, cls.color);
+      playAnim("resurrection", true);
+      saveCharacter(np);
+      return np;
+    });
+  }, [notify, playAnim, saveCharacter]);
+
   // ============================================================
   // SHARED UI
   // ============================================================
@@ -824,17 +911,23 @@ export default function Game() {
       <h2 style={{fontSize:28,marginBottom:6,color:"#ffe066",letterSpacing:2}}>Choose Your Class</h2>
       <p style={{color:"#6a8a7a",marginBottom:32,fontSize:13}}>Playing as <b style={{color:"#88c8ff"}}>{username}</b></p>
       <div style={{display:"flex",gap:20,flexWrap:"wrap",justifyContent:"center"}}>
-        {Object.entries(CLASSES).map(([key,cls])=>(
-          <div key={key} onClick={()=>{ const p=initPlayer(key); setPlayer(p); saveCharacter(p); setScreen("town"); }}
-            style={{background:"rgba(255,255,255,0.05)",border:`2px solid ${cls.color}44`,borderRadius:16,padding:"28px 20px",width:170,cursor:"pointer",textAlign:"center",transition:"all 0.2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.background=`${cls.color}22`;e.currentTarget.style.borderColor=cls.color;e.currentTarget.style.transform="translateY(-4px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)";e.currentTarget.style.borderColor=`${cls.color}44`;e.currentTarget.style.transform="translateY(0)";}}>
+        {Object.entries(CLASSES).map(([key,cls])=>{
+          const locked = key === "necromancer";
+          return (
+          <div key={key}
+            onClick={()=>{ if(locked) return; const p=initPlayer(key); setPlayer(p); saveCharacter(p); setScreen("town"); }}
+            style={{background:"rgba(255,255,255,0.05)",border:`2px solid ${locked?"#4a4a6a":cls.color+"44"}`,borderRadius:16,padding:"28px 20px",width:170,cursor:locked?"default":"pointer",textAlign:"center",transition:"all 0.2s",opacity:locked?0.55:1,position:"relative"}}
+            onMouseEnter={e=>{if(!locked){e.currentTarget.style.background=`${cls.color}22`;e.currentTarget.style.borderColor=cls.color;e.currentTarget.style.transform="translateY(-4px)";}}}
+            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)";e.currentTarget.style.borderColor=locked?"#4a4a6a":`${cls.color}44`;e.currentTarget.style.transform="translateY(0)";}}>
+            {locked && <div style={{position:"absolute",top:10,right:10,fontSize:14}}>🔒</div>}
             <div style={{fontSize:40,marginBottom:10}}>{cls.icon}</div>
-            <div style={{fontSize:18,fontWeight:700,color:cls.color,marginBottom:8}}>{cls.name}</div>
+            <div style={{fontSize:18,fontWeight:700,color:locked?"#6a6a8a":cls.color,marginBottom:8}}>{cls.name}</div>
             <div style={{fontSize:11,color:"#8a9ab0",marginBottom:10}}>HP: {cls.hp} · MP: {cls.mp}</div>
             <div style={{fontSize:10,color:"#6a7a8a",lineHeight:1.8}}>{cls.skills.map(s=>`${s.icon} ${s.name}`).join("\n")}</div>
+            {locked && <div style={{fontSize:10,color:"#7a6a9a",marginTop:8,borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8}}>Unlock via Mortis in town</div>}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -872,6 +965,7 @@ export default function Game() {
     { id:"shop",   name:"Alva's Emporium",  icon:"🛍️", x:42, y:50, action:"shop"         },
     { id:"quest",  name:"Guild Board",      icon:"📋", x:68, y:52, action:"quests"       },
     { id:"rank",   name:"Hall of Heroes",   icon:"🏆", x:30, y:48, action:"leaderboard"  },
+    { id:"mortis", name:"Mortis",           icon:"🌑", x:56, y:44, action:"mortis"       },
     { id:"forest", name:"Dark Forest Gate", icon:"🌲", x:85, y:55, action:"enter_forest" },
   ];
 
@@ -887,6 +981,7 @@ export default function Game() {
               else if(npc.action==="shop") setScreen("shop");
               else if(npc.action==="quests") setScreen("quests");
               else if(npc.action==="leaderboard") openLeaderboard();
+              else if(npc.action==="mortis") setMortisOpen(true);
               else if(npc.action==="enter_forest") { playAnim("teleport"); setTimeout(()=>setScreen("forest"), 400); }
             }}
             style={{position:"absolute",left:`${npc.x}%`,top:`${npc.y}%`,transform:"translate(-50%,-100%)",background:"rgba(0,0,0,0.78)",border:"1px solid rgba(255,255,255,0.18)",color:"#ffe066",padding:"4px 10px",borderRadius:20,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Georgia,serif"}}
@@ -908,6 +1003,7 @@ export default function Game() {
         <StatCard title="Character" items={[["Class",`${CLASSES[player.class].icon} ${CLASSES[player.class].name}`],["Level",player.level],["Attack",`+${player.atk}`],["Defense",`+${player.def}`],["Kills",player.stats.kills],["Deaths",player.stats.deaths]]} />
         <StatCard title="Active Quests" items={player.quests.filter(q=>!q.done).slice(0,3).map(q=>[q.name,`${player.kills[q.target]||0}/${q.count}`])} emptyMsg="No quests active" accentColor="#44ff88" />
       </div>
+      {mortisOpen && <MortisPanel player={player} onClose={()=>setMortisOpen(false)} onAcceptQuest={()=>acceptNpcQuest("mortis")} onBuy={buyUnlockItem} onSwitchClass={switchClass} notify={notify} />}
       <ChatOverlay /><SavingBadge />
     </div>
   );
@@ -1106,6 +1202,120 @@ function Notification({ data }) {
   return (
     <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.9)",border:`1px solid ${data.color}`,color:data.color,padding:"8px 20px",borderRadius:24,fontSize:12,zIndex:100,whiteSpace:"nowrap",pointerEvents:"none"}}>
       {data.msg}
+    </div>
+  );
+}
+
+function MortisPanel({ player, onClose, onAcceptQuest, onBuy, onSwitchClass }) {
+  const npcQuest    = NPC_QUESTS.mortis;
+  const playerQuest = player.quests.find(q => q.id === npcQuest.id);
+  const accepted    = !!playerQuest;
+  const done        = playerQuest?.done;
+  const progress    = Math.min(player.kills[npcQuest.target] || 0, npcQuest.count);
+  const shopDef     = NPC_SHOPS.mortis;
+  const hasAccess   = player.unlocks.includes(shopDef.requires);
+  const nItem       = shopDef.items[0];
+  const hasNecro    = player.unlocks.includes(nItem.unlockId);
+  const isNecro     = player.class === "necromancer";
+
+  const overlay = { position:"fixed", inset:0, background:"rgba(0,0,0,0.78)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:16 };
+  const panel   = { background:"linear-gradient(160deg,#1a0a2e,#0d1117)", border:"1px solid #7b4faa", borderRadius:20, padding:"28px 28px 24px", maxWidth:440, width:"100%", fontFamily:"Georgia,serif", color:"#fff", position:"relative" };
+
+  return (
+    <div style={overlay} onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={panel}>
+        {/* Close */}
+        <button onClick={onClose} style={{position:"absolute",top:14,right:16,background:"none",border:"none",color:"#7a6a9a",fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
+          <div style={{fontSize:52,lineHeight:1,filter:"drop-shadow(0 0 12px #9b59b6)"}}>🌑</div>
+          <div>
+            <div style={{fontSize:20,fontWeight:700,color:"#c39bd3",letterSpacing:1}}>Mortis</div>
+            <div style={{fontSize:11,color:"#7a5a9a",letterSpacing:2,textTransform:"uppercase"}}>Keeper of Shadows</div>
+          </div>
+        </div>
+
+        {/* ── State 1: Quest not yet accepted ── */}
+        {!accepted && (
+          <div>
+            <p style={{fontSize:13,color:"#b0a0c8",lineHeight:1.7,margin:"0 0 18px",borderLeft:"2px solid #7b4faa",paddingLeft:12,fontStyle:"italic"}}>
+              {npcQuest.desc}
+            </p>
+            <div style={{background:"rgba(155,89,182,0.12)",border:"1px solid rgba(155,89,182,0.3)",borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12}}>
+              <div style={{fontWeight:700,color:"#c39bd3",marginBottom:6}}>📜 {npcQuest.name}</div>
+              <div style={{color:"#8a7a9a",marginBottom:4}}>{npcQuest.target} × {npcQuest.count}</div>
+              <div style={{color:"#88c8ff"}}>Reward: +{npcQuest.reward.xp} XP · Grants shop access</div>
+            </div>
+            <button onClick={()=>{ onAcceptQuest(); onClose(); }}
+              style={{width:"100%",background:"linear-gradient(135deg,#7b4faa,#5a3080)",border:"none",color:"#fff",padding:"11px 0",borderRadius:24,cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif",letterSpacing:1}}>
+              Accept the Trial
+            </button>
+          </div>
+        )}
+
+        {/* ── State 2: Quest in progress ── */}
+        {accepted && !done && (
+          <div>
+            <div style={{fontSize:12,color:"#7a8a9a",marginBottom:10,letterSpacing:1,textTransform:"uppercase"}}>Trial in Progress</div>
+            <div style={{background:"rgba(155,89,182,0.1)",border:"1px solid rgba(155,89,182,0.25)",borderRadius:10,padding:"14px",marginBottom:8}}>
+              <div style={{fontWeight:700,color:"#c39bd3",marginBottom:8}}>📜 {npcQuest.name}</div>
+              <MiniBar val={progress} max={npcQuest.count} color="#9b59b6" />
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6a7a8a",marginTop:5}}>
+                <span>{npcQuest.target} slain</span><span>{progress} / {npcQuest.count}</span>
+              </div>
+            </div>
+            <p style={{fontSize:12,color:"#6a5a7a",margin:"12px 0 0",fontStyle:"italic"}}>
+              Return when the deed is done.
+            </p>
+          </div>
+        )}
+
+        {/* ── State 3: Shop unlocked — buy Necromancer ── */}
+        {hasAccess && !hasNecro && (
+          <div style={{marginTop: accepted && !done ? 0 : 0}}>
+            {done && (
+              <div style={{fontSize:12,color:"#44ff88",marginBottom:14,background:"rgba(68,255,136,0.08)",border:"1px solid rgba(68,255,136,0.25)",borderRadius:8,padding:"8px 12px"}}>
+                ✅ Trial complete — the shop is yours.
+              </div>
+            )}
+            <div style={{background:"rgba(155,89,182,0.12)",border:"1px solid rgba(155,89,182,0.35)",borderRadius:12,padding:"16px",display:"flex",alignItems:"center",gap:14}}>
+              <div style={{fontSize:42,lineHeight:1}}>{nItem.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,color:"#c39bd3",fontSize:14,marginBottom:4}}>{nItem.name}</div>
+                <div style={{fontSize:11,color:"#8a7a9a",lineHeight:1.5,marginBottom:8}}>{nItem.desc}</div>
+                <div style={{fontSize:13,color:"#ffd700"}}>🪙 {nItem.cost}G</div>
+              </div>
+            </div>
+            <button
+              onClick={()=>{ onBuy(nItem); }}
+              disabled={player.gold < nItem.cost}
+              style={{width:"100%",marginTop:12,background:player.gold>=nItem.cost?"linear-gradient(135deg,#7b4faa,#5a3080)":"rgba(255,255,255,0.05)",border:"none",color:player.gold>=nItem.cost?"#fff":"#4a4a6a",padding:"11px 0",borderRadius:24,cursor:player.gold>=nItem.cost?"pointer":"not-allowed",fontSize:13,fontFamily:"Georgia,serif",letterSpacing:0.5}}>
+              {player.gold >= nItem.cost ? "Purchase Necromancer Class" : `Need ${nItem.cost - player.gold}G more`}
+            </button>
+          </div>
+        )}
+
+        {/* ── State 4: Purchased — equip the class ── */}
+        {hasNecro && !isNecro && (
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:12,color:"#c39bd3",marginBottom:12,background:"rgba(155,89,182,0.1)",border:"1px solid rgba(155,89,182,0.25)",borderRadius:8,padding:"8px 12px"}}>
+              ✨ Necromancer class unlocked. Command the dead.
+            </div>
+            <button onClick={()=>{ onSwitchClass("necromancer"); onClose(); }}
+              style={{width:"100%",background:"linear-gradient(135deg,#9b59b6,#6c3483)",border:"none",color:"#fff",padding:"11px 0",borderRadius:24,cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif",letterSpacing:1}}>
+              💀 Become the Necromancer
+            </button>
+          </div>
+        )}
+
+        {/* ── State 5: Already playing Necromancer ── */}
+        {isNecro && (
+          <div style={{marginTop:16,fontSize:13,color:"#9b59b6",textAlign:"center",padding:"12px",background:"rgba(155,89,182,0.08)",borderRadius:10,border:"1px solid rgba(155,89,182,0.2)"}}>
+            💀 You already walk in shadow.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

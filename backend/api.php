@@ -99,31 +99,32 @@ function actionSave(array $b): void {
     $kills      = json_encode($c['kills'] ?? []);
     $questState = json_encode($c['quests'] ?? []);
     $stats      = json_encode($c['stats'] ?? ['totalDmg' => 0, 'kills' => 0, 'deaths' => 0]);
+    $unlocks    = json_encode($c['unlocks'] ?? []);
 
     if ($row) {
         $pdo->prepare('UPDATE characters SET
             name=?, class=?, level=?, xp=?, gold=?,
             hp=?, max_hp=?, mp=?, max_mp=?,
             atk_bonus=?, def_bonus=?,
-            kills=?, quest_state=?, stats=?
+            kills=?, quest_state=?, stats=?, unlocks=?
             WHERE user_id=?')
             ->execute([
                 $c['name'] ?? 'Hero', $c['class'], $c['level'], $c['xp'], $c['gold'],
                 $c['hp'], $c['maxHp'], $c['mp'], $c['maxMp'],
                 $c['atk'] ?? 0, $c['def'] ?? 0,
-                $kills, $questState, $stats,
+                $kills, $questState, $stats, $unlocks,
                 $userId
             ]);
     } else {
         $pdo->prepare('INSERT INTO characters
-            (user_id, name, class, level, xp, gold, hp, max_hp, mp, max_mp, atk_bonus, def_bonus, kills, quest_state, stats)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            (user_id, name, class, level, xp, gold, hp, max_hp, mp, max_mp, atk_bonus, def_bonus, kills, quest_state, stats, unlocks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([
                 $userId,
                 $c['name'] ?? 'Hero', $c['class'], $c['level'], $c['xp'], $c['gold'],
                 $c['hp'], $c['maxHp'], $c['mp'], $c['maxMp'],
                 $c['atk'] ?? 0, $c['def'] ?? 0,
-                $kills, $questState, $stats
+                $kills, $questState, $stats, $unlocks
             ]);
     }
 
@@ -189,5 +190,6 @@ function mapCharacter(array $row): array {
         'kills'     => json_decode($row['kills'] ?? '{}', true) ?? [],
         'quests'    => json_decode($row['quest_state'] ?? '[]', true) ?: [],
         'stats'     => json_decode($row['stats'] ?? '{}', true) ?? ['totalDmg' => 0, 'kills' => 0, 'deaths' => 0],
+        'unlocks'   => json_decode($row['unlocks'] ?? '[]', true) ?: [],
     ];
 }

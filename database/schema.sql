@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS characters (
   id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id      INT UNSIGNED NOT NULL,
   name         VARCHAR(32) NOT NULL DEFAULT 'Hero',
-  class        ENUM('warrior','mage','rogue') NOT NULL,
+  class        ENUM('warrior','mage','rogue','necromancer') NOT NULL,
   level        SMALLINT UNSIGNED NOT NULL DEFAULT 1,
   xp           INT UNSIGNED NOT NULL DEFAULT 0,
   gold         INT UNSIGNED NOT NULL DEFAULT 50,
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS characters (
   kills        JSON NOT NULL DEFAULT (JSON_OBJECT()),
   quest_state  JSON NOT NULL DEFAULT (JSON_ARRAY()),
   stats        JSON NOT NULL DEFAULT (JSON_OBJECT('totalDmg',0,'kills',0,'deaths',0)),
+  unlocks      JSON NOT NULL DEFAULT (JSON_ARRAY()),
   updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -60,6 +61,11 @@ CREATE TABLE IF NOT EXISTS chat_log (
   sent_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_zone_time (zone, sent_at)
 );
+
+-- ---- Migration for existing installs ----
+-- Run these if you already imported the schema without the unlocks column:
+-- ALTER TABLE characters MODIFY COLUMN class ENUM('warrior','mage','rogue','necromancer') NOT NULL;
+-- ALTER TABLE characters ADD COLUMN unlocks JSON NOT NULL DEFAULT (JSON_ARRAY()) AFTER stats;
 
 -- ---- Sample data for testing ----
 -- Password for both is "password123"
