@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SmartFoxServer 2X — Zone Configuration
+  Place this file in: SFS2X/config/zones/SunhavenChronicles.xml
+-->
+<zone name="SunhavenChronicles"
+      maxUsers="500"
+      guestLogin="false"
+      filterChain="">
+
+  <!-- Server-side extension -->
+  <extensions>
+    <extension
+      name="SunhavenExt"
+      className="com.sunhaven.SunhavenExtension"
+      type="java"
+      properties-file="SunhavenExt.properties" />
+  </extensions>
+
+  <!-- Persistent public rooms -->
+  <rooms>
+    <room
+      name="Sunhaven Town"
+      maxUsers="50"
+      maxVariables="50"
+      isGame="false"
+      isPublic="true"
+      autoRemoveMode="NEVER"
+      groupId="towns">
+    </room>
+
+    <room
+      name="Dark Forest 1"
+      maxUsers="20"
+      maxVariables="50"
+      isGame="false"
+      isPublic="true"
+      autoRemoveMode="NEVER"
+      groupId="zones">
+    </room>
+
+    <room
+      name="Dark Forest 2"
+      maxUsers="20"
+      maxVariables="50"
+      isGame="false"
+      isPublic="true"
+      autoRemoveMode="NEVER"
+      groupId="zones">
+    </room>
+  </rooms>
+
+  <!-- Room groups to subscribe to by default -->
+  <roomGroups>
+    <group id="towns" subscribeOnLogin="true" />
+    <group id="zones" subscribeOnLogin="false" />
+  </roomGroups>
+
+</zone>
