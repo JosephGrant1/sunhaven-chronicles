@@ -4,7 +4,7 @@
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const API_BASE = "http://localhost/sunhaven/backend/api.php";
+const API_BASE = "https://sunhaven-chronicles-production.up.railway.app/api.php";
 const SFS_HOST = "localhost";
 const SFS_PORT = 8080;
 const SFS_ZONE = "SunhavenChronicles";
