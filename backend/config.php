@@ -2,13 +2,23 @@
 // ============================================================
 // DB Config — edit these to match your phpMyAdmin / MySQL setup
 // ============================================================
-// Railway injects MYSQLHOST etc. automatically when you add a MySQL plugin.
-// Falls back to localhost values for local MAMP dev.
-define('DB_HOST', getenv('MYSQLHOST')     ?: 'localhost');
-define('DB_NAME', getenv('MYSQLDATABASE') ?: 'sunhaven');
-define('DB_USER', getenv('MYSQLUSER')     ?: 'root');
-define('DB_PASS', getenv('MYSQLPASSWORD') ?: 'root');
-define('DB_PORT', (int)(getenv('MYSQLPORT') ?: 3306));
+// Railway provides MYSQL_URL as a full connection string.
+// Individual vars (MYSQLHOST etc.) are fallbacks for local dev.
+$_mysqlUrl = getenv('MYSQL_URL') ?: getenv('DATABASE_URL') ?: null;
+if ($_mysqlUrl) {
+    $_p = parse_url($_mysqlUrl);
+    define('DB_HOST', $_p['host']);
+    define('DB_NAME', ltrim($_p['path'], '/'));
+    define('DB_USER', $_p['user']);
+    define('DB_PASS', $_p['pass'] ?? '');
+    define('DB_PORT', (int)($_p['port'] ?? 3306));
+} else {
+    define('DB_HOST', getenv('MYSQLHOST')     ?: getenv('MYSQL_HOST')     ?: 'localhost');
+    define('DB_NAME', getenv('MYSQLDATABASE') ?: getenv('MYSQL_DATABASE') ?: 'sunhaven');
+    define('DB_USER', getenv('MYSQLUSER')     ?: getenv('MYSQL_USER')     ?: 'root');
+    define('DB_PASS', getenv('MYSQLPASSWORD') ?: getenv('MYSQL_PASSWORD') ?: 'root');
+    define('DB_PORT', (int)(getenv('MYSQLPORT') ?: getenv('MYSQL_PORT')   ?: 3306));
+}
 
 define('TOKEN_SECRET', getenv('TOKEN_SECRET') ?: 'CHANGE_THIS_IN_RAILWAY_VARS');
 define('CORS_ORIGIN', getenv('CORS_ORIGIN')   ?: '*');
