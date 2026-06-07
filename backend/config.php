@@ -2,14 +2,16 @@
 // ============================================================
 // DB Config — edit these to match your phpMyAdmin / MySQL setup
 // ============================================================
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'sunhaven');
-define('DB_USER', 'root');        // your MySQL username
-define('DB_PASS', '');            // your MySQL password
-define('DB_PORT', 3306);
+// Railway injects MYSQLHOST etc. automatically when you add a MySQL plugin.
+// Falls back to localhost values for local MAMP dev.
+define('DB_HOST', getenv('MYSQLHOST')     ?: 'localhost');
+define('DB_NAME', getenv('MYSQLDATABASE') ?: 'sunhaven');
+define('DB_USER', getenv('MYSQLUSER')     ?: 'root');
+define('DB_PASS', getenv('MYSQLPASSWORD') ?: 'root');
+define('DB_PORT', (int)(getenv('MYSQLPORT') ?: 3306));
 
-define('TOKEN_SECRET', 'CHANGE_THIS_TO_A_RANDOM_SECRET_STRING_32CHARS+');
-define('CORS_ORIGIN', '*');       // restrict to your domain in production
+define('TOKEN_SECRET', getenv('TOKEN_SECRET') ?: 'CHANGE_THIS_IN_RAILWAY_VARS');
+define('CORS_ORIGIN', getenv('CORS_ORIGIN')   ?: '*');
 
 function db(): PDO {
     static $pdo = null;
