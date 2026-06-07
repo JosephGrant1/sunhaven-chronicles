@@ -28,10 +28,10 @@ CREATE TABLE IF NOT EXISTS characters (
   max_mp       SMALLINT UNSIGNED NOT NULL,
   atk_bonus    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   def_bonus    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  kills        JSON NOT NULL DEFAULT (JSON_OBJECT()),
-  quest_state  JSON NOT NULL DEFAULT (JSON_ARRAY()),
-  stats        JSON NOT NULL DEFAULT (JSON_OBJECT('totalDmg',0,'kills',0,'deaths',0)),
-  unlocks      JSON NOT NULL DEFAULT (JSON_ARRAY()),
+  kills        JSON,
+  quest_state  JSON,
+  stats        JSON,
+  unlocks      JSON,
   updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -60,9 +60,8 @@ CREATE TABLE IF NOT EXISTS chat_log (
 );
 
 -- ---- Migration for existing installs ----
--- Run these if you already imported the schema without the unlocks column:
 -- ALTER TABLE characters MODIFY COLUMN class ENUM('warrior','mage','rogue','necromancer') NOT NULL;
--- ALTER TABLE characters ADD COLUMN unlocks JSON NOT NULL DEFAULT (JSON_ARRAY()) AFTER stats;
+-- ALTER TABLE characters ADD COLUMN unlocks JSON AFTER stats;
 
 -- ---- Sample data for testing ----
 -- Password for both is "password123"
