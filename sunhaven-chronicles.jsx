@@ -3,6 +3,7 @@
 // Stack: React + SmartFoxServer 2X + MySQL (via PHP API)
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from "react";
+import PhaserGame from "./src/game/PhaserGame.jsx";
 
 const API_BASE = "https://sunhaven-chronicles-production.up.railway.app/api.php";
 const SFS_HOST = "localhost";
@@ -968,6 +969,17 @@ export default function Game() {
     { id:"mortis", name:"Mortis",           icon:"🌑", x:56, y:44, action:"mortis"       },
     { id:"forest", name:"Dark Forest Gate", icon:"🌲", x:85, y:55, action:"enter_forest" },
   ];
+
+  // All in-game screens handled by Phaser client
+  if (player && ["town","forest","battle","shop","quests","leaderboard"].includes(screen)) return (
+    <PhaserGame
+      player={player}
+      authToken={authToken}
+      username={username}
+      onPlayerUpdate={setPlayer}
+      onLogout={logout}
+    />
+  );
 
   if (screen === "town" && player) return (
     <div style={{minHeight:"100vh",background:"#0d1117",fontFamily:"Georgia,serif",color:"#fff",display:"flex",flexDirection:"column"}}>
