@@ -1,0 +1,35 @@
+{
+  "frameSize": 200,
+  "chars": {
+    "oracle": {
+      "idle": 18,
+      "walk": 24,
+      "slash": 12,
+      "throw": 12,
+      "kick": 12,
+      "hurt": 12,
+      "die": 15
+    },
+    "goblin": {
+      "idle": 18,
+      "walk": 24,
+      "attack": 12,
+      "hurt": 12,
+      "die": 15
+    },
+    "orc": {
+      "idle": 18,
+      "walk": 24,
+      "attack": 12,
+      "hurt": 12,
+      "die": 15
+    },
+    "ogre": {
+      "idle": 18,
+      "walk": 24,
+      "attack": 12,
+      "hurt": 12,
+      "die": 15
+    }
+  }
+}

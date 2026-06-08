@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import manifest from '/sprites/chibi/manifest.json';
+import manifest from '../spriteManifest.json';
 
 export const MANIFEST = manifest; // re-exported for scenes to use
 
