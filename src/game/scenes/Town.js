@@ -10,19 +10,14 @@ export default class Town extends Phaser.Scene {
     this.moveTween = null;
 
     this.createParallaxBg(width, height);
-    this.drawForeground(width, height);
     this.createHero(width);
     this.createNPCs(width);
     this.setupInput(width);
 
-    // Clouds
-    this.cloud1 = this.add.ellipse(80,  height * 0.1, 120, 36, 0xffffff, 0.8);
-    this.cloud2 = this.add.ellipse(500, height * 0.15, 100, 28, 0xffffff, 0.8);
-
     EventBus.emit('scene-ready', 'Town');
     EventBus.on('go-forest', this.gotoForest, this);
     EventBus.on('do-rest', () => {
-      this.hero.play('hero_idle', true);
+      this.hero.play('oracle_idle', true);
       EventBus.emit('player-rested');
     }, this);
   }
@@ -41,35 +36,6 @@ export default class Town extends Phaser.Scene {
       layer.scrollSpeed = speeds[i - 1];
       this.bgLayers.push(layer);
     }
-  }
-
-  drawForeground(w, h) {
-    // Transparent ground overlay so NPCs have a surface to stand on
-    const g = this.add.graphics();
-    g.fillStyle(0xd4a96a, 0.35);
-    g.fillTriangle(w * 0.28, h, w * 0.72, h, w * 0.62, h * 0.75);
-    // Forest gate markers (right side)
-    g.fillStyle(0x2d5a27, 0.8);
-    g.fillRect(w * 0.87, h * 0.72 - 100, 18, 100);
-    g.fillRect(w * 0.93, h * 0.72 - 100, 18, 100);
-    g.fillRect(w * 0.87, h * 0.72 - 106, 24, 16);
-  }
-
-  drawBuilding(g, x, h, bw, bh, wall, roof) {
-    const by = h * 0.72 - bh;
-    g.fillStyle(wall); g.fillRect(x - bw / 2, by, bw, bh);
-    g.fillStyle(roof);
-    g.fillTriangle(x - bw / 2 - 8, by, x, by - bh * 0.42, x + bw / 2 + 8, by);
-    g.fillStyle(0x6b3a1f); g.fillRect(x - bw * 0.16, by + bh * 0.6, bw * 0.32, bh * 0.4);
-    g.fillStyle(0xffe08866);
-    g.fillRect(x - bw * 0.38, by + bh * 0.2, bw * 0.26, bh * 0.26);
-    g.fillRect(x + bw * 0.12, by + bh * 0.2, bw * 0.26, bh * 0.26);
-  }
-
-  drawTree(g, x, h, s) {
-    g.fillStyle(0x2d5a27);
-    g.fillTriangle(x, h * 0.72 - s * 2.2, x - s, h * 0.72 - s * 0.5, x + s, h * 0.72 - s * 0.5);
-    g.fillStyle(0x5c3317); g.fillRect(x - s * 0.2, h * 0.72 - s * 0.5, s * 0.4, s * 0.5);
   }
 
   createHero(width) {

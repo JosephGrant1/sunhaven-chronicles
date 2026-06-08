@@ -30,10 +30,10 @@ export default class Boot extends Phaser.Scene {
       });
     });
 
-    // ── Parallax backgrounds (scene 1 = dark forest) ────────
+    // ── Parallax backgrounds ─────────────────────────────────
     [1,2,3,4,5].forEach(i => {
       this.load.image(`bg_forest_${i}`, `/backgrounds/scene1/${i}.png`);
-      this.load.image(`bg_town_${i}`,   `/backgrounds/scene2/${i}.png`);
+      this.load.image(`bg_town_${i}`,   `/backgrounds/scene3/${i}.png`);
     });
 
     // ── UI panels ────────────────────────────────────────────
