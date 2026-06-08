@@ -9,7 +9,8 @@ export default class Town extends Phaser.Scene {
     this.groundY = Math.round(height * 0.72);
     this.moveTween = null;
 
-    this.drawBackground(width, height);
+    this.createParallaxBg(width, height);
+    this.drawForeground(width, height);
     this.createHero(width);
     this.createNPCs(width);
     this.setupInput(width);
@@ -27,41 +28,31 @@ export default class Town extends Phaser.Scene {
   }
 
   update() {
-    // Scroll clouds
-    this.cloud1.x = (this.cloud1.x + 0.15) % (this.scale.width + 120);
-    this.cloud2.x = (this.cloud2.x + 0.08) % (this.scale.width + 120);
-    // Shadow follows hero
+    this.bgLayers?.forEach(layer => { layer.tilePositionX += layer.scrollSpeed; });
     if (this.heroShadow && this.hero) this.heroShadow.x = this.hero.x;
   }
 
-  drawBackground(w, h) {
+  createParallaxBg(w, h) {
+    this.bgLayers = [];
+    const speeds = [0, 0.01, 0.03, 0.06, 0.1];
+    for (let i = 1; i <= 5; i++) {
+      const layer = this.add.tileSprite(0, 0, w, h, `bg_town_${i}`)
+        .setOrigin(0, 0).setDisplaySize(w, h);
+      layer.scrollSpeed = speeds[i - 1];
+      this.bgLayers.push(layer);
+    }
+  }
+
+  drawForeground(w, h) {
+    // Transparent ground overlay so NPCs have a surface to stand on
     const g = this.add.graphics();
-    // Sky
-    g.fillGradientStyle(0xffd59e, 0xffd59e, 0xffb347, 0xffb347, 1);
-    g.fillRect(0, 0, w, h * 0.72);
-    // Ground
-    g.fillGradientStyle(0x7ec850, 0x7ec850, 0x3a7a1a, 0x3a7a1a, 1);
-    g.fillRect(0, h * 0.72, w, h * 0.28);
-    // Stone path
-    g.fillStyle(0xd4a96a);
-    g.fillTriangle(w * 0.28, h, w * 0.72, h, w * 0.62, h * 0.72);
-
-    // Sun
-    const sun = this.add.circle(w * 0.82, h * 0.14, 40, 0xffe066);
-    this.add.circle(w * 0.82, h * 0.14, 52, 0xffcc00, 0.2);
-
-    this.drawBuilding(g, w * 0.10, h, 82, 100, 0xe8c99a, 0xc0392b); // Inn
-    this.drawBuilding(g, w * 0.40, h, 92, 122, 0xd5eaf5, 0x2980b9); // Shop
-    this.drawBuilding(g, w * 0.57, h, 58, 115, 0x1e0e2e, 0x7b4faa); // Mortis tower
-    this.drawBuilding(g, w * 0.72, h, 72, 92,  0xf5e6c8, 0x27ae60); // Guild
-    // Forest gate (right edge)
-    g.fillStyle(0x2d5a27); g.fillRect(w * 0.87, h * 0.72 - 100, 18, 100);
+    g.fillStyle(0xd4a96a, 0.35);
+    g.fillTriangle(w * 0.28, h, w * 0.72, h, w * 0.62, h * 0.75);
+    // Forest gate markers (right side)
+    g.fillStyle(0x2d5a27, 0.8);
+    g.fillRect(w * 0.87, h * 0.72 - 100, 18, 100);
     g.fillRect(w * 0.93, h * 0.72 - 100, 18, 100);
-    g.fillRect(w * 0.87, h * 0.72 - 105, 24, 16);
-    g.fillStyle(0x0d1f0d); g.fillRect(w * 0.875, h * 0.72 - 95, 14, 60);
-    // Trees
-    this.drawTree(g, w * 0.02, h, 16); this.drawTree(g, w * 0.96, h, 14);
-    this.drawTree(g, w * 0.84, h, 20); this.drawTree(g, w * 0.99, h, 18);
+    g.fillRect(w * 0.87, h * 0.72 - 106, 24, 16);
   }
 
   drawBuilding(g, x, h, bw, bh, wall, roof) {
@@ -82,9 +73,9 @@ export default class Town extends Phaser.Scene {
   }
 
   createHero(width) {
-    this.heroShadow = this.add.ellipse(width * 0.3, this.groundY + 6, 52, 14, 0x000000, 0.22);
-    this.hero = this.add.sprite(width * 0.3, this.groundY, 'hero_idle').setOrigin(0.5, 1).setScale(1.6);
-    this.hero.play('hero_idle');
+    this.heroShadow = this.add.ellipse(width * 0.3, this.groundY + 6, 55, 14, 0x000000, 0.28);
+    this.hero = this.add.sprite(width * 0.3, this.groundY, 'oracle_idle').setOrigin(0.5, 1).setScale(1.0);
+    this.hero.play('oracle_idle');
   }
 
   createNPCs(width) {
@@ -126,12 +117,12 @@ export default class Town extends Phaser.Scene {
     const dist = Math.abs(x - this.hero.x);
     if (dist < 8) return;
     this.hero.setFlipX(x < this.hero.x);
-    this.hero.play('hero_walk', true);
+    this.hero.play('oracle_walk', true);
     this.moveTween?.stop();
     this.moveTween = this.tweens.add({
       targets: this.hero, x,
       duration: dist * 4.5, ease: 'Linear',
-      onComplete: () => this.hero.play('hero_idle', true),
+      onComplete: () => this.hero.play('oracle_idle', true),
     });
   }
 

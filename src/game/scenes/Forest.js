@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import { EventBus } from '../EventBus';
 
 const ENEMIES = [
-  { name: 'Shadow Wolf',   hp: 60,  maxHp: 60,  atk: [8,14],  xp: 25, gold: 12, color: 0x7b5ea7, scale: 1.0, boss: false },
-  { name: 'Undead Archer', hp: 80,  maxHp: 80,  atk: [10,18], xp: 35, gold: 18, color: 0x4a7c59, scale: 1.0, boss: false },
-  { name: 'Forest Troll',  hp: 140, maxHp: 140, atk: [14,22], xp: 60, gold: 30, color: 0xc06c00, scale: 1.5, boss: true  },
+  { key:'goblin', name:'Goblin Scout',  hp:60,  maxHp:60,  atk:[8,14],  xp:25, gold:12, scale:0.9, boss:false, color:0x7bc87b },
+  { key:'orc',    name:'Orc Warrior',   hp:80,  maxHp:80,  atk:[10,18], xp:35, gold:18, scale:1.0, boss:false, color:0xc87b3a },
+  { key:'ogre',   name:'Ogre Brute',    hp:140, maxHp:140, atk:[14,22], xp:60, gold:30, scale:1.4, boss:true,  color:0xc84444 },
 ];
 
 const rand = (min, max) => Phaser.Math.Between(min, max);
@@ -14,354 +14,314 @@ export default class Forest extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
-    this.groundY = Math.round(height * 0.74);
+    this.groundY  = Math.round(height * 0.78);
     this.monsters = [];
-    this.target = null;
+    this.target   = null;
     this.inCombat = false;
     this.attackTimer = null;
-    this.moveTween = null;
+    this.moveTween   = null;
     this.player = this.registry.get('player');
 
-    this.drawBackground(width, height);
+    this.createParallaxBg(width, height);
     this.createHero(width);
-    this.spawnMonsters(width, height);
-    this.setupInput(width, height);
+    this.spawnMonsters(width);
+    this.setupInput(width);
 
-    this.cameras.main.fadeIn(400);
+    this.cameras.main.fadeIn(500);
     EventBus.emit('scene-ready', 'Forest');
     EventBus.on('use-skill', this.onUseSkill, this);
     EventBus.on('go-town',   this.gotoTown,   this);
   }
 
-  // ── Background ──────────────────────────────────────────────
-  drawBackground(w, h) {
-    const g = this.add.graphics();
-    g.fillGradientStyle(0x0d1117, 0x0d1117, 0x1a2a1a, 0x1a2a1a, 1);
-    g.fillRect(0, 0, w, h * 0.74);
-    g.fillGradientStyle(0x1a3a1a, 0x1a3a1a, 0x0d1f0d, 0x0d1f0d, 1);
-    g.fillRect(0, h * 0.74, w, h * 0.26);
-    // Moon
-    this.add.circle(w * 0.15, h * 0.12, 28, 0xd4e8b0);
-    this.add.circle(w * 0.15, h * 0.12, 36, 0xa8d070, 0.18);
-    // Stars
-    [[0.3,0.05],[0.5,0.08],[0.7,0.04],[0.85,0.09],[0.6,0.14],[0.2,0.12]].forEach(([sx,sy]) => {
-      this.add.circle(w*sx, h*sy, 1.5, 0xffffff, 0.7);
-    });
-    // Fog strip
-    const fog = this.add.graphics();
-    fog.fillGradientStyle(0x1e3a1e, 0x1e3a1e, 0x1e3a1e, 0x1e3a1e, 0, 0, 0.35, 0.35);
-    fog.fillRect(0, h * 0.60, w, h * 0.14);
-    // Trees (back layer)
-    [0.0,0.12,0.28,0.42,0.60,0.74,0.88,1.0].forEach((fx, i) => this.drawTree(g, w*fx, h, 16 + (i%3)*5, 0x0f240f));
-    // Trees (front layer)
-    [0.05,0.22,0.38,0.55,0.70,0.85,0.95].forEach((fx, i) => this.drawTree(g, w*fx, h, 22 + (i%2)*6, 0x1a3a1a));
-    // Glowing wisps
-    [0.25,0.55,0.78].forEach(fx => {
-      const wisp = this.add.circle(w*fx, h*0.70, 5, 0x44ff88, 0.6);
-      this.tweens.add({ targets: wisp, alpha: { from: 0.3, to: 0.8 }, scaleX: { from: 0.8, to: 1.2 }, scaleY: { from: 0.8, to: 1.2 }, yoyo: true, repeat: -1, duration: 1200 + rand(0, 800) });
-    });
+  // ── Parallax background ──────────────────────────────────
+  createParallaxBg(w, h) {
+    this.bgLayers = [];
+    // 5 layers: 1=sky/far, 5=near foreground
+    const speeds = [0, 0.02, 0.05, 0.1, 0.15];
+    for (let i = 1; i <= 5; i++) {
+      // The source images are 3840×915 — tile them to fill width
+      const img = this.add.tileSprite(0, 0, w, h, `bg_forest_${i}`)
+        .setOrigin(0, 0)
+        .setDisplaySize(w, h);
+      img.scrollSpeed = speeds[i - 1];
+      this.bgLayers.push(img);
+    }
   }
 
-  drawTree(g, x, h, s, color) {
-    g.fillStyle(color);
-    g.fillTriangle(x, h*0.74-s*2.8, x-s*1.1, h*0.74-s*0.3, x+s*1.1, h*0.74-s*0.3);
-    g.fillTriangle(x, h*0.74-s*4.2, x-s*0.8, h*0.74-s*2.2, x+s*0.8, h*0.74-s*2.2);
-    g.fillRect(x-s*0.18, h*0.74-s*0.3, s*0.36, s*0.3);
-  }
-
-  // ── Hero ────────────────────────────────────────────────────
+  // ── Hero ─────────────────────────────────────────────────
   createHero(width) {
-    const x = width * 0.15;
-    this.heroShadow = this.add.ellipse(x, this.groundY + 5, 50, 13, 0x000000, 0.22);
-    this.hero = this.add.sprite(x, this.groundY, 'hero_idle').setOrigin(0.5, 1).setScale(1.5);
-    this.hero.play('hero_idle');
-    this.heroHp = this.player?.hp  ?? 80;
+    const x = width * 0.14;
+    this.heroShadow = this.add.ellipse(x, this.groundY + 6, 55, 14, 0x000000, 0.3);
+    this.hero = this.add.sprite(x, this.groundY, 'oracle_idle').setOrigin(0.5, 1).setScale(1.0);
+    this.hero.play('oracle_idle');
+    this.heroHp    = this.player?.hp    ?? 80;
     this.heroMaxHp = this.player?.maxHp ?? 80;
-    this.heroMp = this.player?.mp  ?? 100;
+    this.heroMp    = this.player?.mp    ?? 100;
     this.heroMaxMp = this.player?.maxMp ?? 100;
-    this.heroAtk = this.player?.atk ?? 0;
-    this.heroDef = this.player?.def ?? 0;
+    this.heroAtk   = this.player?.atk   ?? 0;
+    this.heroDef   = this.player?.def   ?? 0;
   }
 
-  // ── Monsters ────────────────────────────────────────────────
-  spawnMonsters(width, height) {
-    const positions = [width * 0.38, width * 0.58, width * 0.76];
+  // ── Monsters ─────────────────────────────────────────────
+  spawnMonsters(width) {
+    const positions = [width * 0.40, width * 0.60, width * 0.80];
     ENEMIES.forEach((def, i) => {
-      const x = positions[i];
-      const monster = this.createMonster(def, x, this.groundY);
-      this.monsters.push(monster);
-      // Bob tween
-      this.tweens.add({ targets: monster.container, y: `-=${def.boss ? 6 : 4}`, yoyo: true, repeat: -1, duration: def.boss ? 900 : 700, ease: 'Sine.easeInOut' });
+      const mon = this.createMonster(def, positions[i]);
+      this.monsters.push(mon);
     });
   }
 
-  createMonster(def, x, groundY) {
-    const container = this.add.container(x, 0);
+  createMonster(def, x) {
     const s = def.scale;
 
-    // Body graphics
-    const g = this.add.graphics();
-    this.drawMonsterBody(g, def, s);
-    container.add(g);
+    // Sprite — flip to face left (toward hero)
+    const sprite = this.add.sprite(x, this.groundY, `${def.key}_idle`)
+      .setOrigin(0.5, 1)
+      .setScale(s)
+      .setFlipX(true);
+    sprite.play(`${def.key}_idle`);
 
-    // Boss crown
-    if (def.boss) {
-      const crown = this.add.text(0, -groundY + 20, '👑', { fontSize: 18 }).setOrigin(0.5, 1);
-      container.add(crown);
-    }
+    // Shadow
+    const shadow = this.add.ellipse(x, this.groundY + 5, 60 * s, 16 * s, 0x000000, 0.25);
 
-    // Name label (always visible)
-    const nameStyle = { fontFamily: 'Georgia', fontSize: 11, color: def.boss ? '#ffcc00' : '#ffffff', backgroundColor: '#000000bb', padding: { x: 6, y: 3 } };
-    const nameText = this.add.text(0, groundY - 145 * s, (def.boss ? '⚠ ' : '') + def.name, nameStyle).setOrigin(0.5, 1);
-    container.add(nameText);
+    // Name label
+    const nameY = this.groundY - 220 * s;
+    const nameTxt = this.add.text(x, nameY, (def.boss ? '⚠ ' : '') + def.name, {
+      fontFamily: 'Georgia', fontSize: def.boss ? 13 : 11,
+      color: def.boss ? '#ffcc00' : '#ffffff',
+      backgroundColor: '#000000bb', padding: { x:7, y:3 },
+    }).setOrigin(0.5, 1);
 
     // HP bar (hidden until targeted)
-    const barW = def.boss ? 100 : 80;
-    const barY = groundY - 150 * s;
-    const hpBg  = this.add.rectangle(0, barY, barW, 8, 0x333333).setVisible(false);
-    const hpFill = this.add.rectangle(-barW/2, barY, barW, 8, def.color).setOrigin(0, 0.5).setVisible(false);
-    container.add(hpBg); container.add(hpFill);
+    const barW = def.boss ? 110 : 85;
+    const barY = nameY - 12;
+    const hpBg   = this.add.rectangle(x, barY, barW, 9, 0x333333).setVisible(false);
+    const hpFill = this.add.rectangle(x - barW/2, barY, barW, 9, def.color).setOrigin(0, 0.5).setVisible(false);
 
-    // Selection ring
-    const ring = this.add.ellipse(0, groundY - 5, 60 * s, 16 * s, 0xffffff, 0).setStrokeStyle(2, 0xffffff, 0);
-    container.add(ring);
+    // Selection glow
+    const glow = this.add.ellipse(x, this.groundY + 2, 70*s, 18*s, 0xffffff, 0).setStrokeStyle(2, 0xffffff, 0);
 
-    // Interactive zone
-    const hitW = 64 * s, hitH = 120 * s;
-    const zone = this.add.rectangle(0, groundY - hitH / 2, hitW, hitH, 0xffffff, 0).setInteractive({ cursor: 'pointer' });
-    container.add(zone);
+    // Hit zone (transparent interactive rect)
+    const hitW = 160*s, hitH = 220*s;
+    const zone = this.add.rectangle(x, this.groundY - hitH/2, hitW, hitH, 0xffffff, 0)
+      .setInteractive({ cursor:'pointer' });
 
-    const data = { ...def, hp: def.maxHp, container, g, hpBg, hpFill, ring, nameText, hitW, dead: false, lastClick: 0 };
+    const data = {
+      ...def, hp: def.maxHp, sprite, shadow, nameTxt, hpBg, hpFill, glow, zone,
+      dead: false, lastClick: 0,
+    };
 
-    zone.on('pointerover', () => { if (!data.dead) nameText.setStyle({ ...nameStyle, backgroundColor: `#${def.color.toString(16).padStart(6,'0')}88` }); });
-    zone.on('pointerout',  () => { if (!data.dead) nameText.setStyle(nameStyle); });
+    zone.on('pointerover', () => {
+      if (data.dead) return;
+      sprite.setTint(0xddddff);
+      this.game.canvas.style.cursor = 'pointer';
+    });
+    zone.on('pointerout', () => {
+      sprite.clearTint();
+      this.game.canvas.style.cursor = 'default';
+    });
     zone.on('pointerdown', ptr => {
       ptr.event.stopPropagation();
       if (data.dead) return;
       const now = Date.now();
-      if (now - data.lastClick < 350) {
-        this.engageCombat(data);   // double-click
-      } else {
-        this.selectTarget(data);   // single click
-      }
+      if (now - data.lastClick < 350) this.engageCombat(data);
+      else                            this.selectTarget(data);
       data.lastClick = now;
     });
 
-    container.setPosition(x, 0);
+    // Idle bob tween
+    this.tweens.add({ targets: [sprite, shadow, nameTxt, hpBg, hpFill, glow, zone],
+      y: `-=${def.boss ? 8 : 5}`, yoyo:true, repeat:-1,
+      duration: def.boss ? 1000 : 800, ease:'Sine.easeInOut' });
+
     return data;
   }
 
-  drawMonsterBody(g, def, s) {
-    const { color } = def;
-    const c = Phaser.Display.Color.IntegerToColor(color);
-    const dark = Phaser.Display.Color.GetColor(Math.max(0,c.red-40), Math.max(0,c.green-40), Math.max(0,c.blue-40));
-
-    if (def.name === 'Shadow Wolf') {
-      g.fillStyle(color);
-      g.fillRect(-18*s, this.groundY-22*s, 36*s, 20*s);
-      g.fillRect(-10*s, this.groundY-38*s, 22*s, 20*s);
-      g.fillRect(-8*s,  this.groundY-48*s, 7*s,  12*s);
-      g.fillRect(7*s,   this.groundY-48*s, 7*s,  12*s);
-      g.fillStyle(0xff4444); g.fillRect(-4*s, this.groundY-34*s, 5*s, 5*s); g.fillRect(6*s, this.groundY-34*s, 5*s, 5*s);
-      g.fillStyle(dark);  g.fillRect(18*s, this.groundY-22*s, 12*s, 7*s);
-      g.fillStyle(color);
-      [-12,-4,4,12].forEach(lx => g.fillRect(lx*s, this.groundY-2*s, 6*s, 14*s));
-    } else if (def.name === 'Undead Archer') {
-      g.fillStyle(0xc8e6c9); g.fillRect(-8*s, this.groundY-42*s, 16*s, 20*s);
-      g.fillStyle(color);    g.fillRect(-12*s, this.groundY-22*s, 24*s, 28*s);
-      g.fillStyle(0x1b5e20); g.fillRect(-5*s, this.groundY-48*s, 4*s, 8*s); g.fillRect(3*s, this.groundY-48*s, 4*s, 8*s);
-      g.fillStyle(0xff8f00); g.fillRect(-4*s, this.groundY-38*s, 4*s, 4*s); g.fillRect(3*s, this.groundY-38*s, 4*s, 4*s);
-      g.fillStyle(0x795548); g.fillRect(14*s, this.groundY-36*s, 4*s, 36*s);
-      g.fillStyle(color);  g.fillRect(-12*s, this.groundY+6*s, 6*s, 16*s); g.fillRect(6*s, this.groundY+6*s, 6*s, 16*s);
-    } else { // Forest Troll
-      g.fillStyle(color); g.fillRect(-24*s, this.groundY-8*s, 48*s, 34*s);
-      g.fillRect(-18*s, this.groundY-42*s, 36*s, 36*s);
-      g.fillStyle(dark); g.fillRect(-22*s, this.groundY-14*s, 8*s, 44*s); g.fillRect(14*s, this.groundY-14*s, 8*s, 44*s);
-      g.fillStyle(0x00897b); g.fillRect(-10*s, this.groundY-38*s, 8*s, 8*s); g.fillRect(4*s, this.groundY-38*s, 8*s, 8*s);
-      g.fillStyle(0x4e342e); g.fillRect(-8*s, this.groundY-24*s, 16*s, 5*s);
-      g.fillStyle(0x5d4037); g.fillRect(24*s, this.groundY-26*s, 10*s, 44*s); g.fillRect(20*s, this.groundY-32*s, 18*s, 14*s);
-    }
-  }
-
-  // ── Targeting ───────────────────────────────────────────────
+  // ── Targeting ────────────────────────────────────────────
   selectTarget(data) {
-    // Deselect previous
     if (this.target && this.target !== data) this.deselectTarget(this.target);
     this.target = data;
     data.hpBg.setVisible(true);
     data.hpFill.setVisible(true);
-    data.ring.setStrokeStyle(2, 0xffffff, 0.9);
-    this.tweens.add({ targets: data.ring, alpha: { from: 0, to: 1 }, duration: 200 });
-    EventBus.emit('monster-targeted', { name: data.name, hp: data.hp, maxHp: data.maxHp, boss: data.boss, color: data.color });
+    this.tweens.add({ targets: data.glow, alpha: { from:0, to:0.9 }, duration:200 });
+    data.glow.setStrokeStyle(2, 0xffffff, 1);
+    EventBus.emit('monster-targeted', { name:data.name, hp:data.hp, maxHp:data.maxHp, boss:data.boss, color:data.color });
   }
 
   deselectTarget(data) {
     data.hpBg.setVisible(false);
     data.hpFill.setVisible(false);
-    data.ring.setStrokeStyle(2, 0xffffff, 0);
+    data.glow.setAlpha(0);
+    data.glow.setStrokeStyle(2, 0xffffff, 0);
   }
 
-  // ── Combat ──────────────────────────────────────────────────
+  // ── Combat ───────────────────────────────────────────────
   engageCombat(data) {
     if (this.inCombat || data.dead) return;
     this.selectTarget(data);
     this.inCombat = true;
     EventBus.emit('combat-start');
 
-    // Walk hero close to monster
-    const targetX = data.container.x - 90;
-    const dist = Math.abs(this.hero.x - targetX);
+    const targetX = data.sprite.x - 130;
     this.hero.setFlipX(false);
-    this.hero.play('hero_walk', true);
+    this.hero.play('oracle_walk', true);
     this.moveTween?.stop();
     this.moveTween = this.tweens.add({
       targets: [this.hero, this.heroShadow], x: targetX,
-      duration: dist * 4, ease: 'Linear',
-      onComplete: () => this.startAttackLoop(data),
+      duration: Math.abs(this.hero.x - targetX) * 4, ease:'Linear',
+      onComplete: () => this.doPlayerAttack(data, 0),
     });
   }
 
-  startAttackLoop(data) {
-    if (data.dead || !this.inCombat) return;
-    this.hero.play('hero_idle', true);
-    this.doPlayerAttack(data, 0); // default skill 0
-  }
-
+  // skill: 0=throw(magic arrow), 1=slash(desiccation), 2=kick(wave of souls)
   doPlayerAttack(data, skillIdx) {
     if (!this.inCombat || !data || data.dead) return;
 
     const skills = [
-      { name: 'Magic Arrow', anim: 'hero_attack', mp: 0,  dmg: [8,16]  },
-      { name: 'Desiccation', anim: 'hero_cast',   mp: 20, dmg: [20,35] },
-      { name: 'Wave of Souls', anim: 'hero_souls', mp: 40, dmg: [45,65] },
+      { name:'Magic Arrow',    anim:'oracle_throw', mp:0,  dmg:[8,16]  },
+      { name:'Desiccation',    anim:'oracle_slash', mp:20, dmg:[20,35] },
+      { name:'Wave of Souls',  anim:'oracle_kick',  mp:40, dmg:[45,65] },
     ];
-    const skill = skills[skillIdx] ?? skills[0];
+    const skill = skills[Phaser.Math.Clamp(skillIdx, 0, 2)];
 
     if (this.heroMp < skill.mp) {
-      EventBus.emit('log-message', { text: 'Not enough MP!', color: '#ff6b6b' });
-      skillIdx = 0;
+      EventBus.emit('log-message', { text:'Not enough MP!', color:'#ff6b6b' });
+      skill.mp = 0; Object.assign(skill, skills[0]);
     }
 
     this.heroMp = Math.max(0, this.heroMp - skill.mp);
+    EventBus.emit('player-hp-change', { hp:this.heroHp, maxHp:this.heroMaxHp, mp:this.heroMp, maxMp:this.heroMaxMp });
+
     this.hero.play(skill.anim, true);
     this.hero.once('animationcomplete', () => {
-      if (!this.inCombat || data.dead) return;
-      this.hero.play('hero_idle', true);
+      if (!data.dead && this.inCombat) this.hero.play('oracle_idle', true);
     });
 
     const dmg = rand(...skill.dmg) + this.heroAtk;
     data.hp = Math.max(0, data.hp - dmg);
     this.updateHpBar(data);
-    this.floatDamage(data.container.x - 40, this.groundY - 60, dmg, '#ff9966');
-    EventBus.emit('log-message', { text: `${skill.name}: ${dmg} dmg!`, color: '#ff9966' });
-    this.shakeMonster(data);
+    this.floatText(data.sprite.x - 30, data.sprite.y - 160, `-${dmg}`, '#ff9966');
+    EventBus.emit('log-message', { text:`${skill.name}: ${dmg} dmg!`, color:'#ff9966' });
+
+    // Monster recoil
+    this.tweens.add({ targets: data.sprite, x: data.sprite.x + 12, yoyo:true, duration:60, repeat:2 });
+    data.sprite.play(`${data.key}_hurt`, true);
+    data.sprite.once('animationcomplete', () => {
+      if (!data.dead) data.sprite.play(`${data.key}_idle`, true);
+    });
 
     if (data.hp <= 0) { this.onMonsterDead(data); return; }
 
-    // Monster counter-attacks after delay
-    this.attackTimer = this.time.delayedCall(900, () => this.doMonsterAttack(data));
+    this.attackTimer = this.time.delayedCall(950, () => this.doMonsterAttack(data));
   }
 
   doMonsterAttack(data) {
     if (!this.inCombat || data.dead) return;
+    data.sprite.play(`${data.key}_attack`, true);
+    data.sprite.once('animationcomplete', () => {
+      if (!data.dead && this.inCombat) data.sprite.play(`${data.key}_idle`, true);
+    });
+
     const eDmg = Math.max(1, rand(...data.atk) - this.heroDef);
     this.heroHp = Math.max(0, this.heroHp - eDmg);
-    this.hero.play('hero_hurt', true);
-    this.hero.once('animationcomplete', () => this.hero.play('hero_idle', true));
-    this.floatDamage(this.hero.x, this.groundY - 80, eDmg, '#ff4444');
-    EventBus.emit('log-message', { text: `${data.name} hits you for ${eDmg}!`, color: '#ff6b6b' });
-    EventBus.emit('player-hp-change', { hp: this.heroHp, maxHp: this.heroMaxHp });
-    this.cameras.main.shake(120, 0.004);
+    this.hero.play('oracle_hurt', true);
+    this.hero.once('animationcomplete', () => { if (this.inCombat) this.hero.play('oracle_idle', true); });
+    this.floatText(this.hero.x, this.hero.y - 140, `-${eDmg}`, '#ff4444');
+    EventBus.emit('log-message', { text:`${data.name} hits for ${eDmg}!`, color:'#ff6b6b' });
+    EventBus.emit('player-hp-change', { hp:this.heroHp, maxHp:this.heroMaxHp, mp:this.heroMp, maxMp:this.heroMaxMp });
+    this.cameras.main.shake(100, 0.003);
 
     if (this.heroHp <= 0) {
-      this.hero.play('hero_dead', true);
       this.inCombat = false;
-      EventBus.emit('log-message', { text: '💀 You were defeated! Returning to town...', color: '#ff4444' });
-      this.time.delayedCall(1500, () => {
+      this.hero.play('oracle_die', true);
+      EventBus.emit('log-message', { text:'💀 Defeated! Returning to town...', color:'#ff4444' });
+      this.time.delayedCall(1800, () => {
         this.heroHp = Math.floor(this.heroMaxHp * 0.3);
-        EventBus.emit('player-died', { hp: this.heroHp });
+        EventBus.emit('player-died', { hp:this.heroHp });
         this.gotoTown();
       });
       return;
     }
-    // Queue next player attack
-    this.attackTimer = this.time.delayedCall(800, () => this.doPlayerAttack(data, 0));
+    this.attackTimer = this.time.delayedCall(850, () => this.doPlayerAttack(data, 0));
   }
 
   onMonsterDead(data) {
     data.dead = true;
     this.inCombat = false;
     this.attackTimer?.remove();
+    this.hero.play('oracle_idle', true);
 
-    this.hero.play('hero_idle', true);
-    this.tweens.add({ targets: data.container, alpha: 0, duration: 600, delay: 300 });
-
-    const player = this.registry.get('player');
-    const kills = { ...(player?.kills ?? {}), [data.name]: ((player?.kills?.[data.name] ?? 0) + 1) };
-    const newXp   = (player?.xp   ?? 0) + data.xp;
-    const newGold = (player?.gold  ?? 0) + data.gold;
-    const updated = { ...player, xp: newXp, gold: newGold, kills, hp: this.heroHp, mp: this.heroMp };
-
-    this.registry.set('player', updated);
-    EventBus.emit('player-update', updated);
-    EventBus.emit('log-message', { text: `⚔️ ${data.name} defeated! +${data.xp}XP +${data.gold}G`, color: '#44ff88' });
-
-    this.floatDamage(data.container.x, this.groundY - 40, `+${data.xp} XP`, '#ffe066', 20);
-
-    // Respawn after 8s
-    this.time.delayedCall(8000, () => {
-      if (!data.dead) return;
-      data.dead = false;
-      data.hp = data.maxHp;
-      this.updateHpBar(data);
-      this.tweens.add({ targets: data.container, alpha: 1, duration: 600 });
+    data.sprite.play(`${data.key}_die`, true);
+    data.sprite.once('animationcomplete', () => {
+      this.tweens.add({ targets: [data.sprite, data.shadow, data.nameTxt, data.hpBg, data.hpFill, data.glow], alpha:0, duration:500 });
     });
 
-    // Check if target still alive
+    const player = this.registry.get('player');
+    const kills  = { ...(player?.kills ?? {}), [data.name]: ((player?.kills?.[data.name] ?? 0) + 1) };
+    const updated = { ...player, xp:(player?.xp??0)+data.xp, gold:(player?.gold??0)+data.gold, kills, hp:this.heroHp, mp:this.heroMp };
+    this.registry.set('player', updated);
+    EventBus.emit('player-update', updated);
+    EventBus.emit('log-message', { text:`⚔️ ${data.name} defeated! +${data.xp}XP +${data.gold}G`, color:'#44ff88' });
+    this.floatText(data.sprite.x, data.sprite.y - 180, `+${data.xp} XP`, '#ffe066', 18);
+
     if (this.target === data) { this.target = null; EventBus.emit('monster-targeted', null); }
+
+    // Respawn after 10s
+    this.time.delayedCall(10000, () => {
+      if (!data.dead) return;
+      data.dead = false; data.hp = data.maxHp;
+      this.updateHpBar(data);
+      [data.sprite, data.shadow, data.nameTxt, data.glow].forEach(o => { o.setAlpha(0); this.tweens.add({ targets:o, alpha:1, duration:600 }); });
+      data.sprite.play(`${data.key}_idle`, true);
+    });
   }
 
-  onUseSkill(skillIdx) { if (this.inCombat && this.target && !this.target.dead) this.doPlayerAttack(this.target, skillIdx); }
+  onUseSkill(idx) {
+    if (this.inCombat && this.target && !this.target.dead) {
+      this.attackTimer?.remove();
+      this.doPlayerAttack(this.target, idx);
+    }
+  }
 
-  // ── Helpers ─────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────
   updateHpBar(data) {
-    const pct = data.hp / data.maxHp;
-    const barW = data.boss ? 100 : 80;
-    data.hpFill.width = Math.max(0, barW * pct);
-    EventBus.emit('monster-hp-change', { hp: data.hp, maxHp: data.maxHp });
+    const barW = data.boss ? 110 : 85;
+    data.hpFill.width = Math.max(0, barW * (data.hp / data.maxHp));
+    EventBus.emit('monster-hp-change', { hp:data.hp, maxHp:data.maxHp });
   }
 
-  shakeMonster(data) {
-    this.tweens.add({ targets: data.container, x: data.container.x + 6, yoyo: true, repeat: 2, duration: 40, ease: 'Linear',
-      onComplete: () => { data.container.x = ENEMIES.indexOf(data) >= 0 ? data.container.x : data.container.x; } });
-  }
-
-  floatDamage(x, y, value, color, size = 16) {
+  floatText(x, y, value, color, size = 16) {
     const txt = this.add.text(x, y, String(value), {
-      fontFamily: 'Georgia', fontSize: size, fontStyle: 'bold', color, stroke: '#000000', strokeThickness: 3,
+      fontFamily:'Georgia', fontSize:size, fontStyle:'bold', color,
+      stroke:'#000000', strokeThickness:3,
     }).setOrigin(0.5);
-    this.tweens.add({ targets: txt, y: y - 55, alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => txt.destroy() });
+    this.tweens.add({ targets:txt, y:y-60, alpha:0, duration:900, ease:'Cubic.easeOut', onComplete:()=>txt.destroy() });
   }
 
-  setupInput(width, height) {
+  setupInput(width) {
     this.input.on('pointerdown', ptr => {
-      if (ptr.worldY < this.groundY - 120) return;
-      const x = Phaser.Math.Clamp(ptr.worldX, 40, width * 0.25); // only left portion walkable freely
+      if (ptr.worldY < this.groundY - 150 || this.inCombat) return;
+      const x = Phaser.Math.Clamp(ptr.worldX, 40, width * 0.28);
       this.moveHeroTo(x);
     });
   }
 
   moveHeroTo(x) {
-    if (this.inCombat) return;
     const dist = Math.abs(x - this.hero.x);
     if (dist < 8) return;
     this.hero.setFlipX(x < this.hero.x);
-    this.hero.play('hero_walk', true);
+    this.hero.play('oracle_walk', true);
     this.moveTween?.stop();
     this.moveTween = this.tweens.add({
-      targets: [this.hero, this.heroShadow], x, duration: dist * 4.5, ease: 'Linear',
-      onComplete: () => this.hero.play('hero_idle', true),
+      targets:[this.hero, this.heroShadow], x, duration:dist*4.5, ease:'Linear',
+      onComplete:()=>this.hero.play('oracle_idle', true),
     });
+  }
+
+  update() {
+    // Parallax scroll
+    this.bgLayers?.forEach(layer => { layer.tilePositionX += layer.scrollSpeed; });
+    if (this.heroShadow && this.hero) this.heroShadow.x = this.hero.x;
   }
 
   gotoTown() {
@@ -371,6 +331,5 @@ export default class Forest extends Phaser.Scene {
     this.time.delayedCall(320, () => this.scene.start('Town'));
   }
 
-  update() { if (this.heroShadow && this.hero) this.heroShadow.x = this.hero.x; }
   shutdown() { this.attackTimer?.remove(); EventBus.removeAllListeners(); }
 }
